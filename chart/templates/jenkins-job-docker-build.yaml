@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-job-docker-build
+data:
+  docker-build-default-config.xml: |
+    <?xml version='1.1' encoding='UTF-8'?>
+    <flow-definition plugin="workflow-job@2.32">
+      <description></description>
+      <keepDependencies>false</keepDependencies>
+      <properties>
+        <hudson.model.ParametersDefinitionProperty>
+          <parameterDefinitions>
+            <hudson.model.StringParameterDefinition>
+              <name>GIT_URL</name>
+              <description></description>
+              <defaultValue></defaultValue>
+              <trim>true</trim>
+            </hudson.model.StringParameterDefinition>
+            <hudson.model.StringParameterDefinition>
+              <name>GIT_BRANCH</name>
+              <description></description>
+              <defaultValue>master</defaultValue>
+              <trim>true</trim>
+            </hudson.model.StringParameterDefinition>
+            <hudson.model.StringParameterDefinition>
+              <name>DOCKERFILE_DIR</name>
+              <description></description>
+              <defaultValue>./</defaultValue>
+              <trim>true</trim>
+            </hudson.model.StringParameterDefinition>
+            <hudson.model.StringParameterDefinition>
+              <name>DOCKERFILE</name>
+              <description></description>
+              <defaultValue>Dockerfile</defaultValue>
+              <trim>true</trim>
+            </hudson.model.StringParameterDefinition>
+            <hudson.model.StringParameterDefinition>
+              <name>DOCKER_IMAGE_NAME</name>
+              <description></description>
+              <defaultValue></defaultValue>
+              <trim>true</trim>
+            </hudson.model.StringParameterDefinition>
+            <hudson.model.StringParameterDefinition>
+              <name>DOCKER_IMAGE_TAG</name>
+              <description></description>
+              <defaultValue>latest</defaultValue>
+              <trim>true</trim>
+            </hudson.model.StringParameterDefinition>
+          </parameterDefinitions>
+        </hudson.model.ParametersDefinitionProperty>
+      </properties>
+      <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.77">
+        <script>def label = &quot;${env.BUILD_TAG}&quot;
+
+    podTemplate(label: label, yaml: &quot;&quot;&quot;
+    kind: Pod
+    metadata:
+      name: docker-build
+    spec:
+      {{- with .Values.jenkins.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: docker-build
+        image: {{ .Values.docker_io_registry.url -}}/{{- .Values.jenkins_job_docker_build.image }}
+        command:
+        - dockerd-entrypoint.sh
+        - --registry-mirror=http://${env.DOCKER_IO_MIRROR}
+        - --insecure-registry=${env.REGISTRY_LOCAL}
+        - --insecure-registry=${env.REGISTRY_EXTERNAL}
+        env:
+        - name: REGISTRY_LOCAL
+          value: ${env.REGISTRY_LOCAL}
+        - name: REGISTRY_EXTERNAL
+          value: ${env.REGISTRY_EXTERNAL}
+        - name: http_proxy
+          value: ${env.http_proxy}
+        - name: https_proxy
+          value: ${env.https_proxy}
+        - name: no_proxy
+          value: ${env.no_proxy}
+        tty: true
+        securityContext:
+          allowPrivilegeEscalation: true
+          privileged: true
+        {{- with .Values.jenkins_job_docker_build.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        volumeMounts:
+        - name: pub
+          mountPath: /var/www/pub
+          readOnly: false
+        - name: docker-var
+          mountPath: /var/lib/docker
+          readOnly: false
+      volumes:
+      - name: pub
+        persistentVolumeClaim:
+          claimName: {{ .Release.Namespace -}}-pub-pvc
+      - name: docker-var
+        emptyDir: {}
+    &quot;&quot;&quot;
+      ) {
+      node(label) {
+        container(name: &apos;docker-build&apos;) {
+          stage(&apos;docker build&apos;) {
+            sh &apos;&apos;&apos;#!/bin/bash -e
+            set -x
+            git clone $GIT_URL repo
+            cd repo/$DOCKERFILE_DIR
+            if [ -e hooks/pre_build ]; then
+              ./hooks/pre_build
+            fi
+            docker build -t $DOCKER_IMAGE_NAME --build-arg http_proxy --build-arg https_proxy --build-arg no_proxy -f $DOCKERFILE .
+            docker tag $DOCKER_IMAGE_NAME $REGISTRY_LOCAL/$DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+            docker push $REGISTRY_LOCAL/$DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+            docker tag $DOCKER_IMAGE_NAME $REGISTRY_EXTERNAL/$DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+            mkdir -p /var/www/pub/$JOB_BASE_NAME/
+            docker save -o /var/www/pub/$JOB_BASE_NAME/$DOCKER_IMAGE_NAME-$DOCKER_IMAGE_TAG.tar $REGISTRY_EXTERNAL/$DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+            &apos;&apos;&apos;
+          }
+        }
+      }
+    }
+    </script>
+        <sandbox>true</sandbox>
+      </definition>
+      <triggers/>
+      <disabled>false</disabled>
+    </flow-definition>

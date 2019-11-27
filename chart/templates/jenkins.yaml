@@ -1,0 +1,178 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jenkins
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jenkins
+    spec:
+      {{- with .Values.jenkins.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 10
+      serviceAccountName: {{ .Chart.Name }}
+      securityContext:
+        allowPrivilegeEscalation: true
+        fsGroup: 1000
+      containers:
+        - name: jenkins
+          image: {{ .Values.docker_io_registry.url -}}/{{- .Values.jenkins.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+            - containerPort: 50000
+          resources:
+            requests:
+              cpu: 1
+              memory: 1Gi
+          tty: true
+          command:
+          - /bin/bash
+          - -c
+          - |
+            set -e
+            set -x
+            if [ ! -e /var/jenkins_home/jobs ]; then
+              cp -a /var/jenkins_home/preinstall-jobs /var/jenkins_home/jobs
+            fi
+            {{- if .Values.jenkins.plugins }}
+            if [ ! -e /var/jenkins_home/preinstall-plugins/.done ]; then
+              rm -rf /usr/share/jenkins/ref/plugins
+              mkdir -p /var/jenkins_home/preinstall-plugins
+              ln -s /var/jenkins_home/preinstall-plugins /usr/share/jenkins/ref/plugins
+              rm -rf /var/jenkins_home/preinstall-plugins/*.lock
+              /usr/local/bin/install-plugins.sh \
+              {{- range $index, $val := .Values.jenkins.plugins }}
+              {{ $val | indent 8 }} \
+              {{- end }}
+              && touch /var/jenkins_home/preinstall-plugins/.done
+              rm -f /usr/share/jenkins/ref/plugins
+            fi
+            rm -rf /usr/share/jenkins/ref/plugins
+            cp -a /var/jenkins_home/preinstall-plugins /usr/share/jenkins/ref/plugins
+            {{- end }}
+            if [ ! -e /var/jenkins_home/config.xml ]; then
+              cp /var/jenkins_home/default-config.xml /var/jenkins_home/config.xml
+            fi
+            exec /sbin/tini -- /usr/local/bin/jenkins.sh
+          env:
+            - name: LIMITS_MEMORY
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: 1Mi
+            - name: JENKINS_OPTS
+              value: --prefix=/{{- .Values.ingress.jenkins_path }}
+            - name: JAVA_OPTS
+              value: |
+                -Xmx$(LIMITS_MEMORY)m
+                -XshowSettings:vm
+                -Dhudson.slaves.NodeProvisioner.initialDelay=0
+                -Dhudson.slaves.NodeProvisioner.MARGIN=50
+                -Dhudson.slaves.NodeProvisioner.MARGIN0=0.85
+                -Dcom.sun.jndi.ldap.object.disableEndpointIdentification=true
+                {{- if .Values.jenkins.trustStore }}
+                -Djavax.net.ssl.trustStore={{- .Values.jenkins.trustStore }}
+                {{- end }}
+                {{- if .Values.jenkins.timeZone }}
+                -Duser.timezone={{- .Values.jenkins.timeZone }}
+                {{- end }}
+            {{- if .Values.proxy.enabled }}
+            - name: http_proxy
+              value: {{ .Values.proxy.http_proxy }}
+            - name: https_proxy
+              value: {{ .Values.proxy.https_proxy }}
+            - name: no_proxy
+              value: {{ .Values.proxy.no_proxy }}
+            {{- end }}
+          volumeMounts:
+            - name: jenkins-master-home
+              mountPath: /var/jenkins_home
+            - name: default-config
+              mountPath: /var/jenkins_home/default-config.xml
+              subPath: default-config.xml
+            {{- if .Values.jenkins_job_docker_build.enabled }}
+            - name: jenkins-job-docker-build
+              mountPath: /var/jenkins_home/preinstall-jobs/docker-build/config.xml
+              subPath: docker-build-default-config.xml
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.ingress.jenkins_path -}}/login
+              port: 8080
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.ingress.jenkins_path -}}/login
+              port: 8080
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 24
+      volumes:
+        - name: jenkins-master-home
+          persistentVolumeClaim:
+            claimName: {{ .Release.Namespace -}}-jenkins-master-home-pvc
+        - name: default-config
+          configMap:
+            name: jenkins-configs
+        {{- if .Values.jenkins_job_docker_build.enabled }}
+        - name: jenkins-job-docker-build
+          configMap:
+            name: jenkins-job-docker-build
+        {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins
+spec:
+  selector:
+    app.kubernetes.io/name: jenkins
+  ports:
+    -
+      name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    -
+      name: agent
+      port: 50000
+      protocol: TCP
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: jenkins
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.ingress_class }}
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /{{- .Values.ingress.jenkins_path }}
+        backend:
+          serviceName: jenkins
+          servicePort: 80
+    host: {{ .Values.ingress.base_url }}

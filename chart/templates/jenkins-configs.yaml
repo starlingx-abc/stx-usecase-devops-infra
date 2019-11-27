@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-configs
+data:
+  default-config.xml: |
+    <?xml version='1.1' encoding='UTF-8'?>
+    <hudson>
+      <disabledAdministrativeMonitors/>
+      <installStateName>RUNNING</installStateName>
+      <numExecutors>2</numExecutors>
+      <mode>NORMAL</mode>
+      <useSecurity>false</useSecurity>
+      <authorizationStrategy class="hudson.security.AuthorizationStrategy$Unsecured"/>
+      <securityRealm class="hudson.security.SecurityRealm$None"/>
+      <disableRememberMe>false</disableRememberMe>
+      <projectNamingStrategy class="jenkins.model.ProjectNamingStrategy$DefaultProjectNamingStrategy"/>
+      <workspaceDir>${JENKINS_HOME}/workspace/${ITEM_FULL_NAME}</workspaceDir>
+      <buildsDir>${ITEM_ROOTDIR}/builds</buildsDir>
+      <markupFormatter class="hudson.markup.EscapedMarkupFormatter"/>
+      <jdks/>
+      <viewsTabBar class="hudson.views.DefaultViewsTabBar"/>
+      <myViewsTabBar class="hudson.views.DefaultMyViewsTabBar"/>
+      <clouds>
+        <org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud plugin="kubernetes@{{- template "stx-devops.kubernetes-plugin-version" . }}">
+          <name>kubernetes</name>
+          <defaultsProviderTemplate>default</defaultsProviderTemplate>
+          <templates>
+            <org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+              <inheritFrom></inheritFrom>
+              <name>default</name>
+              <containers>
+                <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+                  <name>jnlp</name>
+                  <image>{{- .Values.docker_io_registry.url -}}/{{- .Values.jenkins.slave_image -}}</image>
+                  <command></command>
+                  <args></args>
+                  <runAsUser>1000</runAsUser>
+                  <runAsGroup>1000</runAsGroup>
+                  <ttyEnabled>true</ttyEnabled>
+                </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+              </containers>
+            </org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+          </templates>
+          <serverUrl>https://kubernetes.default</serverUrl>
+          <skipTlsVerify>true</skipTlsVerify>
+          <addMasterProxyEnvVars>false</addMasterProxyEnvVars>
+          <capOnlyOnAlivePods>false</capOnlyOnAlivePods>
+          <namespace>{{- .Release.Namespace -}}</namespace>
+          <directConnection>false</directConnection>
+          <jenkinsUrl>http://jenkins.{{- .Release.Namespace -}}.svc.cluster.local/{{- .Values.ingress.jenkins_path -}}</jenkinsUrl>
+          <containerCap>10</containerCap>
+          <retentionTimeout>5</retentionTimeout>
+          <connectTimeout>5</connectTimeout>
+          <readTimeout>15</readTimeout>
+          <podLabels/>
+          <usageRestricted>false</usageRestricted>
+          <maxRequestsPerHost>32</maxRequestsPerHost>
+          <waitForPodSec>600</waitForPodSec>
+          <podRetention class="org.csanchez.jenkins.plugins.kubernetes.pod.retention.Never"/>
+        </org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud>
+      </clouds>
+      <quietPeriod>5</quietPeriod>
+      <scmCheckoutRetryCount>0</scmCheckoutRetryCount>
+      <views>
+        <hudson.model.AllView>
+          <owner class="hudson" reference="../../.."/>
+          <name>all</name>
+          <filterExecutors>false</filterExecutors>
+          <filterQueue>false</filterQueue>
+          <properties class="hudson.model.View$PropertyList"/>
+        </hudson.model.AllView>
+      </views>
+      <primaryView>all</primaryView>
+      <slaveAgentPort>50000</slaveAgentPort>
+      <label></label>
+      <nodeProperties/>
+      <globalNodeProperties>
+        <hudson.slaves.EnvironmentVariablesNodeProperty>
+          <envVars serialization="custom">
+            <unserializable-parents/>
+            <tree-map>
+              <default>
+                <comparator class="hudson.util.CaseInsensitiveComparator"/>
+              </default>
+              <int>6</int>
+              <string>http_proxy</string>
+              <string>{{- .Values.proxy.http_proxy -}}</string>
+              <string>https_proxy</string>
+              <string>{{- .Values.proxy.https_proxy -}}</string>
+              <string>no_proxy</string>
+              <string>{{- .Values.proxy.no_proxy -}}</string>
+              <string>DOCKER_IO_MIRROR</string>
+              <string>docker-io-mirror.{{- .Release.Namespace -}}.svc.cluster.local</string>
+              <string>REGISTRY_LOCAL</string>
+              <string>registry.{{- .Release.Namespace -}}.svc.cluster.local</string>
+              <string>REGISTRY_EXTERNAL</string>
+              <string>{{ .Values.ingress.base_url }}</string>
+            </tree-map>
+          </envVars>
+        </hudson.slaves.EnvironmentVariablesNodeProperty>
+      </globalNodeProperties>
+      <noUsageStatistics>true</noUsageStatistics>
+    </hudson>

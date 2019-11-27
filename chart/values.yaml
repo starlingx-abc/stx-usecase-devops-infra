@@ -1,0 +1,75 @@
+proxy:
+  enabled: false
+  http_proxy: ""
+  https_proxy: ""
+  no_proxy: "localhost,127.0.0.1,localaddress,.localdomain.com,.local,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12"
+
+docker_io_registry:
+  url: docker.io
+
+ingress:
+  ingress_class: "nginx-cluster"
+  base_url: ""
+  jenkins_path: "jenkins"
+  pub_path: "pub"
+
+ceph:
+  monitors:
+  - controller-0:6789
+  - controller-1:6789
+  user: ""
+  key: ""
+
+cephfs_pvc:
+  jenkins-master-home:
+    path: jenkins-master
+    readOnly: false
+  pub:
+    path: pub
+    readOnly: false
+  registry:
+    path: registry
+    readOnly: false
+  docker-io-mirror:
+    path: docker-io-mirror
+    readOnly: false
+
+docker_io_mirror:
+    image: registry:2.7.1
+    # ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
+    # nodeSelector: {}
+
+registry:
+    image: registry:2.7.1
+    # nodeSelector: {}
+
+pub:
+    image: nginx:1.16.0
+    replicas: 2
+    # nodeSelector: {}
+
+jenkins:
+    image: jenkins/jenkins:2.190.3-alpine
+    slave_image: jenkins/jnlp-slave:3.35-5-alpine
+    timeZone: "Asia/Shanghai"
+    jenkins_token: ""
+    plugins:
+    - kubernetes:1.20.2
+    - workflow-job:2.32
+    - workflow-aggregator:2.6
+    - git:3.10.0
+    # nodeSelector: {}
+
+jenkins_job_docker_build:
+    enabled: true
+    image: starlingxabc/docker-build
+    resources:
+      requests:
+        cpu: 2
+        memory: 2Gi
+        ephemeral-storage: 4Gi
+      limits:
+        cpu: 4
+        memory: 4Gi
+        ephemeral-storage: 16Gi
+    # nodeSelector: {}

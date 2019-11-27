@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docker-io-mirror-config
+data:
+  config.yml: |
+    version: 0.1
+    log:
+      fields:
+        service: registry
+    storage:
+      cache:
+        blobdescriptor: inmemory
+      filesystem:
+        rootdirectory: /var/lib/registry
+        maxthreads: 64
+    http:
+      addr: :5000
+      headers:
+        X-Content-Type-Options: [nosniff]
+    health:
+      storagedriver:
+        enabled: true
+        interval: 10s
+        threshold: 3
+    proxy:
+      remoteurl: https://registry-1.docker.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-io-mirror
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: docker-io-mirror
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: docker-io-mirror
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: docker-io-mirror
+    spec:
+      {{- with .Values.docker_io_mirror.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: docker-io-mirror
+          image: {{ .Values.docker_io_registry.url -}}/{{- .Values.docker_io_mirror.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          env:
+            {{- if .Values.proxy.enabled }}
+            - name: http_proxy
+              value: {{ .Values.proxy.http_proxy }}
+            - name: https_proxy
+              value: {{ .Values.proxy.https_proxy }}
+            - name: no_proxy
+              value: {{ .Values.proxy.no_proxy }}
+            {{- end }}
+          volumeMounts:
+            - name: docker-io-mirror-config
+              mountPath: "/etc/docker/registry"
+            - name: docker-io-mirror-var
+              mountPath: /var/lib/registry
+              readOnly: false
+          livenessProbe:
+            httpGet:
+              path: /v2
+              port: 5000
+          readinessProbe:
+            httpGet:
+              path: /v2
+              port: 5000
+      volumes:
+        - name: docker-io-mirror-config
+          configMap:
+            name: docker-io-mirror-config
+        - name: docker-io-mirror-var
+          persistentVolumeClaim:
+            claimName: {{ .Release.Namespace -}}-docker-io-mirror-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docker-io-mirror
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: docker-io-mirror
+spec:
+  selector:
+    app.kubernetes.io/name: docker-io-mirror
+  ports:
+    -
+      name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP

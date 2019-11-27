@@ -1,0 +1,4 @@
+{{- $envAll := . }}
+{{- range $name, $value := $envAll.Values.cephfs_pvc }}
+{{ tuple $envAll $name | include "stx-devops.cephfs-pvc" | indent 0 }}
+{{- end }}
