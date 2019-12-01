@@ -71,7 +71,7 @@ spec:
       {{- end }}
       containers:
         - name: pub
-          image: {{ .Values.docker_io_registry.url -}}/{{- .Values.pub.image }}
+          image: {{ .Values.images.tags.nginx }}
           imagePullPolicy: IfNotPresent
           tty: true
           ports:

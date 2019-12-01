@@ -27,7 +27,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: jenkins
-          image: {{ .Values.docker_io_registry.url -}}/{{- .Values.jenkins.image }}
+          image: {{ .Values.images.tags.jenkins }}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

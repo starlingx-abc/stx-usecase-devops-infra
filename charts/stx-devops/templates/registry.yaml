@@ -22,7 +22,7 @@ spec:
       {{- end }}
       containers:
         - name: registry
-          image: {{ .Values.docker_io_registry.url -}}/{{- .Values.registry.image }}
+          image: {{ .Values.images.tags.registry }}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000

@@ -64,7 +64,7 @@ data:
       {{- end }}
       containers:
       - name: docker-build
-        image: {{ .Values.docker_io_registry.url -}}/{{- .Values.jenkins_job_docker_build.image }}
+        image: {{ .Values.images.tags.docker_build }}
         command:
         - dockerd-entrypoint.sh
         - --registry-mirror=http://${env.DOCKER_IO_MIRROR}

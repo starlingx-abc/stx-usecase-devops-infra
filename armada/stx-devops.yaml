@@ -1,0 +1,49 @@
+---
+schema: armada/Chart/v1
+metadata:
+  schema: metadata/Document/v1
+  name: stx-devops
+data:
+  chart_name: stx-devops
+  dependencies: []
+  release: stx-devops
+  namespace: stx-devops
+  install:
+    no_hooks: false
+  upgrade:
+    no_hooks: false
+  source:
+    location: http://172.17.0.1:8080/helm_charts/starlingx/stx-devops-1.0.0.tgz
+    reference: master
+    subpath: stx-devops
+    type: tar
+  test:
+    enabled: false
+  values:
+    docker_io_registry.url: docker.io
+    ingress.base_url: stx-devops.example.local
+    ceph.user: client.stx-devops
+    ceph.key: ""
+    proxy.enabled: false
+    proxy.http_proxy: ""
+    proxys.http_proxy: ""
+
+---
+schema: armada/ChartGroup/v1
+metadata:
+  schema: metadata/Document/v1
+  name: stx-devops-group
+data:
+  description: StarlingX DevOps Example
+  sequenced: False
+  chart_group:
+    - stx-devops
+---
+schema: armada/Manifest/v1
+metadata:
+  schema: metadata/Document/v1
+  name: stx-devops-armada
+data:
+  release_prefix: stx-devops
+  chart_groups:
+    - stx-devops-group

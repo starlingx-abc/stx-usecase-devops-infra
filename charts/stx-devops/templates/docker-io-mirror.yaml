@@ -50,7 +50,7 @@ spec:
       {{- end }}
       containers:
         - name: docker-io-mirror
-          image: {{ .Values.docker_io_registry.url -}}/{{- .Values.docker_io_mirror.image }}
+          image: {{ .Values.images.tags.registry }}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000

@@ -32,7 +32,7 @@ data:
               <containers>
                 <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
                   <name>jnlp</name>
-                  <image>{{- .Values.docker_io_registry.url -}}/{{- .Values.jenkins.slave_image -}}</image>
+                  <image>{{- .Values.images.tags.jenkins_slave -}}</image>
                   <command></command>
                   <args></args>
                   <runAsUser>1000</runAsUser>
